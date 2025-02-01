@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Roteamento</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .tabs {
+            display: flex;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .tabs div {
+            padding: 10px 20px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .tabs .active {
+            background-color: #ddd;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        canvas {
+            border: 1px solid #000;
+            margin-top: 20px;
+        }
+        .interfaces-container {
+            margin-bottom: 20px;
+        }
+        .roteador-container {
+            margin-top: 20px;
+        }
+        .tabela-roteamento {
+            margin-top: 10px;
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .tabela-roteamento th, .tabela-roteamento td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: left;
+        }
+        .tabela-roteamento th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simulador de Roteamento</h1>
+
+    <div class="tabs">
+        <div class="tab active" data-tab="visualizar">Visualizar Gráfico e Tabelas</div>
+        <div class="tab" data-tab="adicionar">Adicionar Roteador</div>
+        <div class="tab" data-tab="troca-pacotes">Trocar Pacotes</div>
+    </div>
+
+    <div class="tab-content active" id="visualizar">
+        <h2>Visualizar Gráfico</h2>
+        <canvas id="grafico" width="600" height="400"></canvas>
+
+        <h2>Visualizar Roteadores e Tabelas de Roteamento</h2>
+        <div id="roteadores-lista"></div>
+    </div>
+
+    <div class="tab-content" id="adicionar">
+        <h2>Adicionar Roteador e Interfaces</h2>
+        <form id="form-adicionar-roteador">
+            <label for="nome">Nome do Roteador:</label>
+            <input type="text" id="nome" name="nome" required><br><br>
+
+            <div class="interfaces-container">
+                <h3>Interfaces:</h3>
+                <div id="interfaces-list">
+                    <div class="interface-item">
+                        <label for="nome">Nome da Interface:</label>
+                        <input type="text" class="nome" name="nome" required><br><br>
+
+                        <label for="ip">Endereço IP da Interface:</label>
+                        <input type="text" class="ip" name="ip[]" required><br><br>
+
+                        <label for="mascara">Máscara da Interface:</label>
+                        <input type="text" class="mascara" name="mascara[]" required><br><br>
+                    </div>
+                </div>
+                <button type="button" id="adicionar-interface">Adicionar Interface</button><br><br>
+            </div>
+
+            <button type="submit">Adicionar Roteador e Interfaces</button>
+        </form>
+    </div>
+
+    <div class="tab-content" id="troca-pacotes">
+        <h2>Trocar Pacotes</h2>
+        <form id="form-troca-pacotes">
+            <label for="origem">Roteador de Origem:</label>
+            <select id="origem" required>
+                <option value="">Selecione o roteador</option>
+            </select><br><br>
+
+            <label for="origem-interface">Interface de Origem:</label>
+            <select id="origem-interface" required>
+                <option value="">Selecione a interface</option>
+            </select><br><br>
+
+            <label for="destino">Roteador de Destino:</label>
+            <select id="destino" required>
+                <option value="">Selecione o roteador</option>
+            </select><br><br>
+
+            <label for="destino-interface">Interface de Destino:</label>
+            <select id="destino-interface" required>
+                <option value="">Selecione a interface</option>
+            </select><br><br>
+
+            <button type="submit">Trocar Pacotes</button>
+        </form>
+    </div>
+
+    <script>
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.getAttribute('data-tab');
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(tabName).classList.add('active');
+            });
+        });
+
+        function carregarInterfaces(roteadorNome, tipo) {
+            fetch(`/listar-interfaces/${roteadorNome}`)
+                .then(response => response.json())
+                .then(data => {
+                    const interfaceSelect = tipo === 'origem' ? document.getElementById('origem-interface') : document.getElementById('destino-interface');
+                    interfaceSelect.innerHTML = '<option value="">Selecione a interface</option>'; // Limpar opções
+                    data.interfaces.forEach(interface => {
+                        const option = document.createElement('option');
+                        option.value = interface.nome;
+                        option.textContent = interface.nome;
+                        interfaceSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Erro ao carregar interfaces:', error));
+        }
+
+        window.onload = carregarRoteadores;
+        
+    </script>
+
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+</body>
+</html>
