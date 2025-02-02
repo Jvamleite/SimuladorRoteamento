@@ -2,18 +2,9 @@ const canvas = document.getElementById('grafico');
 const ctx = canvas.getContext('2d');
 
 let roteadores = [];
-const conexoes = [];
 
 function desenharGrafico() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    conexoes.forEach(conexao => {
-        ctx.beginPath();
-        ctx.moveTo(conexao.origem.x, conexao.origem.y);
-        ctx.lineTo(conexao.destino.x, conexao.destino.y);
-        ctx.strokeStyle = '#000';
-        ctx.stroke();
-    });
 
     roteadores.forEach(roteador => {
         ctx.beginPath();
@@ -25,175 +16,143 @@ function desenharGrafico() {
     });
 }
 
-document.getElementById('form-troca-pacotes').addEventListener('submit', function (e) {
-    e.preventDefault();
-    
-    const origem = document.getElementById('origem').value;
-    const destinoInterface = document.getElementById('destino-interface').value;
-    
-    const roteadorDestino = roteadores.find(r => r.nome === document.getElementById('destino').value);
-    const interfaceDestino = roteadorDestino?.interfaces.find(i => i.nome === destinoInterface);
-    
-    if (!interfaceDestino) {
-        alert('Interface de destino não encontrada');
-        return;
-    }
+function atualizarSelectsRoteadores(data) {
+    const origemSelect = document.getElementById('origem');
+    const destinoSelect = document.getElementById('destino');
+    origemSelect.innerHTML = destinoSelect.innerHTML = '<option value="">Selecione o roteador</option>';
 
-    const dados = {
-        origem,
-        ip_destino: interfaceDestino.ip 
-    };
-
-    fetch('/trocar-pacotes', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(dados)
-    })
-    .then(response => response.json())
-    .then(data => {
-        let mensagem = data.message;
-        if (data.caminho) {
-            mensagem += `\nCaminho: ${data.caminho.join(' -> ')}\nCusto total: ${data.custo_total}`;
-        }
-        alert(mensagem);
-        carregarRoteadores()
-    })
-    .catch(error => {
-        console.error('Erro ao trocar pacotes:', error);
+    data.forEach(({ nome }) => {
+        const option = new Option(nome, nome);
+        origemSelect.appendChild(option.cloneNode(true));
+        destinoSelect.appendChild(option);
     });
-});
-
-function carregarRoteadores() {
-    fetch('/listar-roteadores')
-        .then(response => response.json())
-        .then(data => {
-            exibirRoteadores(data);
-            const origemSelect = document.getElementById('origem');
-            const destinoSelect = document.getElementById('destino');
-            origemSelect.innerHTML = '<option value="">Selecione o roteador</option>';
-            destinoSelect.innerHTML = '<option value="">Selecione o roteador</option>';
-            data.forEach(roteador => {
-                const optionOrigem = document.createElement('option');
-                optionOrigem.value = roteador.nome;
-                optionOrigem.textContent = roteador.nome;
-                origemSelect.appendChild(optionOrigem);
-
-                const optionDestino = document.createElement('option');
-                optionDestino.value = roteador.nome;
-                optionDestino.textContent = roteador.nome;
-                destinoSelect.appendChild(optionDestino);
-            });
-            
-        })
-        .catch(error => console.error('Erro ao carregar roteadores:', error));
 }
 
-document.getElementById('origem').addEventListener('change', (e) => {
-    carregarInterfaces(e.target.value, 'origem');
-});
-document.getElementById('destino').addEventListener('change', (e) => {
-    carregarInterfaces(e.target.value, 'destino');
-});
+async function carregarInterfaces(nomeRoteador, tipo) {
+    try {
+        const response = await fetch(`/listar-interfaces/${nomeRoteador}`);
+        const data = await response.json();
 
-function carregarInterfaces(nomeRoteador, tipo) {
-    fetch(`/listar-interfaces/${nomeRoteador}`)
-        .then(response => response.json())
-        .then(data => {
-            const selectInterface = document.getElementById(`${tipo}-interface`);
-            
-            selectInterface.innerHTML = '';
-            
-            data.forEach(interfaceRede => {
-                let optionOrigem = document.createElement('option');
-                optionOrigem.value = interfaceRede.nome;
-                optionOrigem.textContent = `${interfaceRede.nome} - ${interfaceRede.ip}`;
-                selectInterface.appendChild(optionOrigem);
-            });
-        })
-        .catch(error => console.error('Erro ao carregar interfaces:', error));
+        const selectInterface = document.getElementById(`${tipo}-interface`);
+        selectInterface.innerHTML = '';
+
+        data.forEach(({ nome, ip }) => {
+            const option = new Option(`${nome} - ${ip}`, nome);
+            selectInterface.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Erro ao carregar interfaces:', error);
+    }
 }
 
-function exibirRoteadores(r) {
+function gerarTabelaRoteamento(tabela) {
+    if (!tabela || !Object.keys(tabela).length) return '<p>A tabela de roteamento está vazia.</p>';
+
+    return `
+        <table class="tabela-roteamento">
+            <thead>
+                <tr><th>Destino</th><th>Máscara</th><th>Interface</th><th>Custo</th><th>Próximo Salto</th></tr>
+            </thead>
+            <tbody>
+                ${Object.entries(tabela).map(([destino, { mascara, interface: iface, custo, proximo_salto }]) => `
+                    <tr>
+                        <td>${destino}</td>
+                        <td>${mascara}</td>
+                        <td>${iface}</td>
+                        <td>${custo}</td>
+                        <td>${proximo_salto || 'Direto'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function exibirRoteadores(roteadores) {
     const listaRoteadores = document.getElementById('roteadores-lista');
     listaRoteadores.innerHTML = '';
 
-    r.forEach(roteador => {
+    roteadores.forEach(({ nome, tabela_roteamento }) => {
         const divRoteador = document.createElement('div');
         divRoteador.innerHTML = `
-        <h3>${roteador.nome}</h3>
-        <h4>Tabela de Roteamento:</h4>
-        ${roteador.tabela_roteamento && Object.keys(roteador.tabela_roteamento).length > 0 ? `
-            <table class="tabela-roteamento">
-                <thead>
-                    <tr>
-                        <th>Destino</th>
-                        <th>Máscara</th>
-                        <th>Interface</th>
-                        <th>Custo</th>
-                        <th>Próximo Salto</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${Object.entries(roteador.tabela_roteamento).map(([destino, rota]) => `
-                        <tr>
-                            <td>${destino}</td>
-                            <td>${rota.mascara}</td>
-                            <td>${rota.interface}</td>
-                            <td>${rota.custo}</td>
-                            <td>${rota.proximo_salto || 'Direto'}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        ` : '<p>A tabela de roteamento está vazia.</p>'}
-    `;
+            <h3>${nome}</h3>
+            <h4>Tabela de Roteamento:</h4>
+            ${gerarTabelaRoteamento(tabela_roteamento)}
+        `;
         listaRoteadores.appendChild(divRoteador);
     });
 }
 
-document.getElementById('form-adicionar-roteador').addEventListener('submit', function (e) {
+
+async function carregarRoteadores() {
+    try {
+        const response = await fetch('/listar-roteadores');
+        const data = await response.json();
+        exibirRoteadores(data);
+        atualizarSelectsRoteadores(data);
+    } catch (error) {
+        console.error('Erro ao carregar roteadores:', error);
+    }
+}
+
+
+
+document.getElementById('origem').addEventListener('change', (e) => carregarInterfaces(e.target.value, 'origem'));
+document.getElementById('destino').addEventListener('change', (e) => carregarInterfaces(e.target.value, 'destino'));
+
+document.getElementById('form-troca-pacotes').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const origem = document.getElementById('origem').value;
+    const destinoInterface = document.getElementById('destino-interface').value;
+    const destinoNome = document.getElementById('destino').value;
+    const roteadorDestino = roteadores.find(r => r.nome === destinoNome);
+    const interfaceDestino = roteadorDestino?.interfaces.find(i => i.nome === destinoInterface);
+    
+    if (!interfaceDestino) return alert('Interface de destino não encontrada');
+
+    try {
+        const response = await fetch('/trocar-pacotes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ origem, ip_destino: interfaceDestino.ip })
+        });
+
+        const data = await response.json();
+        let mensagem = data.message;
+        if (data.caminho) mensagem += `\nCaminho: ${data.caminho.join(' -> ')}\nCusto total: ${data.custo_total}`;
+        alert(mensagem);
+        carregarRoteadores();
+    } catch (error) {
+        console.error('Erro ao trocar pacotes:', error);
+    }
+});
+
+document.getElementById('form-adicionar-roteador').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const nome = document.getElementById('nome').value;
-    const ipList = [];
-    const mascaraList = [];
-    const nomeList = [];
+    const nomeList = [...document.querySelectorAll('.nome')].map(input => input.value);
+    const ipList = [...document.querySelectorAll('.ip')].map(input => input.value);
+    const mascaraList = [...document.querySelectorAll('.mascara')].map(input => input.value);
 
-    document.querySelectorAll('.nome').forEach(input => nomeList.push(input.value));
-    document.querySelectorAll('.ip').forEach(input => ipList.push(input.value));
-    document.querySelectorAll('.mascara').forEach(input => mascaraList.push(input.value));
+    try {
+        const response = await fetch('/adicionar-roteador', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome, nome_interface: nomeList, ip: ipList, mascara: mascaraList })
+        });
 
-    const dados = {
-        nome: nome,
-        nome_interface: nomeList,
-        ip: ipList,
-        mascara: mascaraList
-    };
-
-    fetch('/adicionar-roteador', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(dados)
-    })
-    .then(response => response.json())
-    .then(data => {
+        const data = await response.json();
         alert(data.message);
 
-        const novoRoteador = {
-            nome: data.roteador.nome,
-            x: data.roteador.x,
-            y: data.roteador.y,
-            interfaces: data.roteador.interfaces
-        };
-
-        roteadores.push(novoRoteador);
+        roteadores.push({ nome: data.roteador.nome, x: data.roteador.x, y: data.roteador.y, interfaces: data.roteador.interfaces });
         desenharGrafico();
         carregarRoteadores();
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Erro ao adicionar roteador:', error);
         alert('Erro ao adicionar roteador: ' + error.message);
-    });
+    }
 });
 
 document.getElementById('adicionar-interface').addEventListener('click', function () {
@@ -212,9 +171,3 @@ document.getElementById('adicionar-interface').addEventListener('click', functio
     document.getElementById('interfaces-list').appendChild(interfaceItem);
 });
 
-function atualizarTabelas() {
-    carregarRoteadores();
-    setTimeout(atualizarTabelas, 30000);
-}
-
-//atualizarTabelas();
