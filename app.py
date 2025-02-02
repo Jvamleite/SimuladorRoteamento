@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 roteadores = {}
-roteadores.clear()
 
 class InterfaceRede:
     def __init__(self, nome, ip, mascara):
@@ -105,15 +104,6 @@ class ProtocoloRoteamento:
 
 class RIP(ProtocoloRoteamento):
     def atualizar_tabela(self, roteador, roteador_vizinho):
-        for interface in roteador.interfaces.values():
-            rede = ipaddress.IPv4Network(f"{interface.ip}/{interface.mascara}", strict=False)
-            roteador.tabela_roteamento.adicionar_rota(
-                destino=str(rede.network_address),
-                mascara=interface.mascara,
-                interface=interface.nome,
-                custo=1 
-            )
-            
         for destino, rota in roteador_vizinho.tabela_roteamento.rotas.items():
             if rota['interface'] == roteador.nome:
                 continue
@@ -160,14 +150,10 @@ def adicionar_roteador():
         nomes_interfaces = data.get('nome_interface', [])
         ips = data.get('ip', [])
         mascaras = data.get('mascara', [])
-        
-        #if nome in roteadores:
-        #    return jsonify({'message': 'Roteador com esse nome já existe!'}), 400
-
+    
         if not nome or not ips or not mascaras:
             return jsonify({'message': 'Nome, IP e Máscara são necessários!'}), 400
 
-        # Validar se IPs já estão em uso
         for ip in ips:
             for r in roteadores.values():
                 for i in r.interfaces.values():
@@ -175,13 +161,12 @@ def adicionar_roteador():
                         return jsonify({'message': f'IP {ip} já está em uso!'}), 400
 
         roteador = Roteador(nome)
-        roteador.x = randint(50, 400)
-        roteador.y = randint(50, 500)
+        roteador.x = randint(200, 250)
+        roteador.y = randint(300, 400)
 
         for ip, mascara, nome_interface in zip(ips, mascaras, nomes_interfaces):
             try:
                 roteador.adicionar_interface(nome=nome_interface, ip=ip, mascara=mascara)
-                # Adiciona rota direta
                 rede = ipaddress.IPv4Network(f"{ip}/{mascara}", strict=False)
                 roteador.tabela_roteamento.adicionar_rota(
                     destino=str(rede.network_address),
@@ -217,6 +202,7 @@ def encontrar_melhor_rota(roteador, ip_destino):
         
         for destino, rota in roteador.tabela_roteamento.rotas.items():
             rede = ipaddress.IPv4Network(f"{destino}/{rota['mascara']}", strict=False)
+            ip_dest = ipaddress.IPv4Address(ip_destino)
             if ip_dest in rede:
                 if rota['custo'] < menor_custo:
                     menor_custo = rota['custo']
@@ -228,7 +214,6 @@ def encontrar_melhor_rota(roteador, ip_destino):
 
 @app.route('/trocar-pacotes', methods=['POST'])
 def trocar_pacotes():
-    try:
         data = request.json
         origem = data['origem']
         ip_destino = data['ip_destino']
@@ -262,9 +247,6 @@ def trocar_pacotes():
             else:
                 return jsonify({'message': 'Destino não alcançável'}), 404
 
-    except Exception as e:
-        return jsonify({'message': f'Erro interno no servidor: {str(e)}'}), 500
-
 @app.route('/listar-roteadores', methods=['GET'])
 def listar_roteadores():
     roteadores_list = [roteador.to_dict() for roteador in roteadores.values()]
@@ -284,4 +266,4 @@ def listar_interfaces(nome_roteador):
     return jsonify(interfaces_json)
 
 if __name__ == '__main__':
-    app.run(port=5016)
+    app.run(port=5016, debug = True, use_reloader = False)
